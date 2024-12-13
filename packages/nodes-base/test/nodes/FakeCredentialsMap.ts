@@ -121,4 +121,11 @@ BQIDAQAB
 		secret: 'baz',
 		algorithm: 'HS256',
 	},
+	telegramApi: {
+		accessToken: 'testToken',
+		baseUrl: 'https://api.telegram.org',
+	},
+	notionApi: {
+		apiKey: 'key123',
+	},
 } as const;
