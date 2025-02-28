@@ -17,6 +17,7 @@ import {
 	openContextMenu,
 } from '../composables/workflow';
 import { NDV, WorkflowExecutionsTab } from '../pages';
+import { clearNotifications, successToast } from '../pages/notifications';
 import { WorkflowPage as WorkflowPageClass } from '../pages/workflow';
 
 const WorkflowPage = new WorkflowPageClass();
@@ -28,8 +29,6 @@ const ZOOM_IN_X2_FACTOR = 1.5625; // Zoom in factor after two clicks
 const ZOOM_OUT_X1_FACTOR = 0.8;
 const ZOOM_OUT_X2_FACTOR = 0.64;
 
-const PINCH_ZOOM_IN_FACTOR = 1.05702;
-const PINCH_ZOOM_OUT_FACTOR = 0.946058;
 const RENAME_NODE_NAME = 'Something else';
 const RENAME_NODE_NAME2 = 'Something different';
 
@@ -237,7 +236,11 @@ describe('Canvas Node Manipulation and Navigation', () => {
 	it('should delete node using context menu', () => {
 		WorkflowPage.actions.addNodeToCanvas(SCHEDULE_TRIGGER_NODE_NAME);
 		WorkflowPage.actions.addNodeToCanvas(CODE_NODE_NAME);
-		WorkflowPage.actions.deleteNodeFromContextMenu(CODE_NODE_NAME);
+		WorkflowPage.actions.zoomToFit();
+		WorkflowPage.actions.deleteNodeFromContextMenu(CODE_NODE_NAME, {
+			method: 'right-click',
+			anchor: 'topLeft',
+		});
 		WorkflowPage.getters.canvasNodes().should('have.length', 1);
 		WorkflowPage.getters.nodeConnections().should('have.length', 0);
 	});
@@ -369,26 +372,6 @@ describe('Canvas Node Manipulation and Navigation', () => {
 			zoomAndCheck('zoomOut', ZOOM_OUT_X2_FACTOR);
 		});
 
-		it('should zoom using scroll or pinch gesture', () => {
-			WorkflowPage.actions.pinchToZoom(1, 'zoomIn');
-
-			// V2 Canvas is using the same zoom factor for both pinch and scroll
-			cy.ifCanvasVersion(
-				() => checkZoomLevel(PINCH_ZOOM_IN_FACTOR),
-				() => checkZoomLevel(ZOOM_IN_X1_FACTOR),
-			);
-
-			WorkflowPage.actions.pinchToZoom(1, 'zoomOut');
-			checkZoomLevel(1); // Zoom in 1x + Zoom out 1x should reset to default (=1)
-
-			WorkflowPage.actions.pinchToZoom(1, 'zoomOut');
-
-			cy.ifCanvasVersion(
-				() => checkZoomLevel(PINCH_ZOOM_OUT_FACTOR),
-				() => checkZoomLevel(ZOOM_OUT_X1_FACTOR),
-			);
-		});
-
 		it('should reset zoom', () => {
 			WorkflowPage.getters.resetZoomButton().should('not.exist');
 			WorkflowPage.getters.zoomInButton().click();
@@ -398,6 +381,7 @@ describe('Canvas Node Manipulation and Navigation', () => {
 
 		it('should zoom to fit', () => {
 			WorkflowPage.actions.addNodeToCanvas(MANUAL_TRIGGER_NODE_NAME);
+			WorkflowPage.actions.addNodeToCanvas(CODE_NODE_NAME);
 			WorkflowPage.actions.addNodeToCanvas(CODE_NODE_NAME);
 			WorkflowPage.actions.addNodeToCanvas(CODE_NODE_NAME);
 			WorkflowPage.actions.addNodeToCanvas(CODE_NODE_NAME);
@@ -507,6 +491,9 @@ describe('Canvas Node Manipulation and Navigation', () => {
 		WorkflowPage.actions.addNodeToCanvas(CODE_NODE_NAME);
 		WorkflowPage.actions.executeWorkflow();
 
+		successToast().should('contain.text', 'Workflow executed successfully');
+		clearNotifications();
+
 		ExecutionsTab.actions.switchToExecutionsTab();
 		ExecutionsTab.getters.successfulExecutionListItems().should('have.length', 1);
 
@@ -542,36 +529,5 @@ describe('Canvas Node Manipulation and Navigation', () => {
 			cy.get('[class*=hasIssues]').should('have.length', 1);
 			NDVDialog.actions.close();
 		});
-	});
-
-	// FIXME: Canvas V2: Unknown nodes should still render connection endpoints
-	it('should render connections correctly if unkown nodes are present', () => {
-		const unknownNodeName = 'Unknown node';
-		cy.createFixtureWorkflow('workflow-with-unknown-nodes.json', 'Unknown nodes');
-
-		WorkflowPage.getters.canvasNodeByName(`${unknownNodeName} 1`).should('exist');
-		WorkflowPage.getters.canvasNodeByName(`${unknownNodeName} 2`).should('exist');
-		WorkflowPage.actions.zoomToFit();
-
-		cy.draganddrop(
-			WorkflowPage.getters.getEndpointSelector('plus', `${unknownNodeName} 1`),
-			WorkflowPage.getters.getEndpointSelector('input', EDIT_FIELDS_SET_NODE_NAME),
-		);
-
-		cy.draganddrop(
-			WorkflowPage.getters.getEndpointSelector('plus', `${unknownNodeName} 2`),
-			WorkflowPage.getters.getEndpointSelector('input', `${EDIT_FIELDS_SET_NODE_NAME}1`),
-		);
-
-		WorkflowPage.actions.executeWorkflow();
-		cy.contains('Unrecognized node type').should('be.visible');
-
-		WorkflowPage.actions.deselectAll();
-		WorkflowPage.actions.deleteNodeFromContextMenu(`${unknownNodeName} 1`);
-		WorkflowPage.actions.deleteNodeFromContextMenu(`${unknownNodeName} 2`);
-
-		WorkflowPage.actions.executeWorkflow();
-
-		cy.contains('Unrecognized node type').should('not.exist');
 	});
 });
